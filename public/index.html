@@ -3,33 +3,58 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>릴레이 스토리 게임</title>
+  <title>이어쓰는 이야기</title>
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
   <main>
-    <h1>릴레이 스토리 게임</h1>
+    <h1>이어쓰는 이야기</h1>
 
     <section id="join-screen">
       <input id="room-input" type="text" placeholder="방 코드 (예: room1)" maxlength="32" />
       <input id="name-input" type="text" placeholder="닉네임" maxlength="24" />
       <button id="join-button">입장하기</button>
+      <p id="join-error" class="error-text"></p>
+    </section>
+
+    <section id="lobby-screen" class="hidden">
+      <h2>대기실 — 방: <span id="lobby-room-label"></span></h2>
+      <p class="muted">3~6명이 모이면 방장이 게임을 시작할 수 있습니다.</p>
+      <ul id="lobby-participant-list"></ul>
+      <button id="start-button" class="hidden">게임 시작</button>
+      <p id="lobby-hint" class="muted"></p>
     </section>
 
     <section id="game-screen" class="hidden">
       <div class="room-header">
-        <span id="room-label"></span>
+        <span id="round-label"></span>
         <span id="turn-indicator"></span>
       </div>
 
-      <div id="story-list"></div>
+      <div class="game-body">
+        <div id="story-log" class="log-box"></div>
 
-      <form id="submit-form">
-        <textarea id="text-input" maxlength="280" placeholder="다음 이야기를 이어써 주세요..."></textarea>
-        <button type="submit">이어쓰기</button>
-      </form>
+        <aside id="scoreboard"></aside>
+      </div>
 
-      <aside id="participant-list"></aside>
+      <div id="action-panel"></div>
+    </section>
+
+    <section id="end-screen" class="hidden">
+      <h2>판 종료!</h2>
+      <ol id="final-scoreboard"></ol>
+      <h3>이번 판 이야기 전체 보기</h3>
+      <div id="end-story-log" class="log-box"></div>
+
+      <div class="end-actions">
+        <button id="replay-button" class="hidden">다시하기</button>
+        <button id="end-room-button" class="hidden">방 종료</button>
+        <button id="leave-room-button">방 나가기</button>
+      </div>
+
+      <h3>지난 판 목록</h3>
+      <ul id="round-history-list"></ul>
+      <div id="round-history-detail"></div>
     </section>
   </main>
 

@@ -16,6 +16,7 @@ interface Participant {
   name: string;
   score: number;
   connected: boolean;
+  isBot: boolean;
 }
 
 type Phase = "lobby" | "blank_card" | "shuffle" | "draw" | "story" | "voting" | "round_ended";
@@ -175,7 +176,7 @@ export class StoryRoom {
     }
 
     if (!participant) {
-      participant = { id: crypto.randomUUID(), name, score: 0, connected: true };
+      participant = { id: crypto.randomUUID(), name, score: 0, connected: true, isBot: false };
       this.state.participants.push(participant);
       if (!this.state.ownerId) this.state.ownerId = participant.id;
     } else {
@@ -241,47 +242,20 @@ export class StoryRoom {
         if (!["place", "object", "action"].includes(cardType) || !text) {
           return send({ type: "error", message: "유형과 내용을 입력해 주세요." });
         }
-        const card: Card = { id: crypto.randomUUID(), type: cardType, text };
-        this.state.ownedCards.push(card);
-        this.state.deck.push(card);
-        this.state.log.push({
-          type: "blank_card_added",
-          authorId: participantId,
-          authorName: this.nameOf(participantId),
-          ts: Date.now(),
-        });
-        this.state.phase = "shuffle";
+        this.doSubmitBlankCard(participantId, cardType, text);
         break;
       }
       case "shuffle": {
         if (this.state.phase !== "shuffle") return send({ type: "error", message: "지금은 셔플 단계가 아닙니다." });
         if (this.currentTurnId() !== participantId) return send({ type: "error", message: "당신의 차례가 아닙니다." });
-        this.state.deck = shuffle(this.state.deck);
-        this.state.log.push({
-          type: "shuffle",
-          authorId: participantId,
-          authorName: this.nameOf(participantId),
-          ts: Date.now(),
-        });
-        this.state.phase = "draw";
+        this.doShuffle(participantId);
         break;
       }
       case "draw": {
         if (this.state.phase !== "draw") return send({ type: "error", message: "지금은 드로우 단계가 아닙니다." });
         if (this.currentTurnId() !== participantId) return send({ type: "error", message: "당신의 차례가 아닙니다." });
         if (this.state.deck.length === 0) return send({ type: "error", message: "덱에 카드가 없습니다." });
-        const idx = Math.floor(Math.random() * this.state.deck.length);
-        const card = this.state.deck.splice(idx, 1)[0];
-        this.state.drawnCard = card;
-        this.state.log.push({
-          type: "draw",
-          authorId: participantId,
-          authorName: this.nameOf(participantId),
-          cardType: card.type,
-          cardText: card.text,
-          ts: Date.now(),
-        });
-        this.state.phase = "story";
+        this.doDraw(participantId);
         break;
       }
       case "submit_story": {
@@ -294,20 +268,35 @@ export class StoryRoom {
         if (card.type !== "ending" && !text.includes(card.text)) {
           return send({ type: "error", message: `이야기에 "${card.text}"를 반드시 포함해야 합니다.` });
         }
-        this.state.currentStory = {
-          authorId: participantId,
-          authorName: this.nameOf(participantId),
-          text,
-          votes: {},
-        };
-        this.state.log.push({
-          type: "story",
-          authorId: participantId,
-          authorName: this.nameOf(participantId),
-          text,
-          ts: Date.now(),
+        this.doSubmitStory(participantId, text);
+        break;
+      }
+      case "add_bot": {
+        if (!isOwner) return send({ type: "error", message: "방장만 봇을 추가할 수 있습니다." });
+        if (this.state.phase !== "lobby" && this.state.phase !== "round_ended") {
+          return send({ type: "error", message: "게임 진행 중에는 봇을 추가할 수 없습니다." });
+        }
+        if (this.state.participants.length >= MAX_PLAYERS) {
+          return send({ type: "error", message: "방 정원이 가득 찼습니다 (최대 6명)." });
+        }
+        const botNumber = this.state.participants.filter((p) => p.isBot).length + 1;
+        this.state.participants.push({
+          id: crypto.randomUUID(),
+          name: `봇${botNumber}`,
+          score: 0,
+          connected: true,
+          isBot: true,
         });
-        this.state.phase = "voting";
+        break;
+      }
+      case "remove_bot": {
+        if (!isOwner) return send({ type: "error", message: "방장만 봇을 제거할 수 있습니다." });
+        if (this.state.phase !== "lobby" && this.state.phase !== "round_ended") {
+          return send({ type: "error", message: "게임 진행 중에는 봇을 제거할 수 없습니다." });
+        }
+        const idx = this.state.participants.findIndex((p) => p.id === data.id && p.isBot);
+        if (idx === -1) return;
+        this.state.participants.splice(idx, 1);
         break;
       }
       case "vote": {
@@ -334,8 +323,128 @@ export class StoryRoom {
         return;
     }
 
+    this.runBotsIfNeeded();
     await this.persist();
     this.broadcast();
+  }
+
+  private doSubmitBlankCard(participantId: string, cardType: CardType, text: string) {
+    const card: Card = { id: crypto.randomUUID(), type: cardType, text };
+    this.state.ownedCards.push(card);
+    this.state.deck.push(card);
+    this.state.log.push({
+      type: "blank_card_added",
+      authorId: participantId,
+      authorName: this.nameOf(participantId),
+      ts: Date.now(),
+    });
+    this.state.phase = "shuffle";
+  }
+
+  private doShuffle(participantId: string) {
+    this.state.deck = shuffle(this.state.deck);
+    this.state.log.push({
+      type: "shuffle",
+      authorId: participantId,
+      authorName: this.nameOf(participantId),
+      ts: Date.now(),
+    });
+    this.state.phase = "draw";
+  }
+
+  private doDraw(participantId: string): boolean {
+    if (this.state.deck.length === 0) return false;
+    const idx = Math.floor(Math.random() * this.state.deck.length);
+    const card = this.state.deck.splice(idx, 1)[0];
+    this.state.drawnCard = card;
+    this.state.log.push({
+      type: "draw",
+      authorId: participantId,
+      authorName: this.nameOf(participantId),
+      cardType: card.type,
+      cardText: card.text,
+      ts: Date.now(),
+    });
+    this.state.phase = "story";
+    return true;
+  }
+
+  private doSubmitStory(participantId: string, text: string) {
+    this.state.currentStory = {
+      authorId: participantId,
+      authorName: this.nameOf(participantId),
+      text,
+      votes: {},
+    };
+    this.state.log.push({
+      type: "story",
+      authorId: participantId,
+      authorName: this.nameOf(participantId),
+      text,
+      ts: Date.now(),
+    });
+    this.state.phase = "voting";
+  }
+
+  private runBotsIfNeeded(depth = 0) {
+    if (depth > 200) return;
+    if (this.tryOneBotAction()) {
+      this.runBotsIfNeeded(depth + 1);
+    }
+  }
+
+  private tryOneBotAction(): boolean {
+    const phase = this.state.phase;
+    const midTurnPhases: Phase[] = ["blank_card", "shuffle", "draw", "story"];
+
+    if (midTurnPhases.includes(phase)) {
+      const turnId = this.currentTurnId();
+      const turnP = turnId ? this.state.participants.find((p) => p.id === turnId) : undefined;
+      if (!turnP?.isBot) return false;
+
+      if (phase === "blank_card") {
+        const pools: Record<"place" | "object" | "action", string[]> = {
+          place: PLACE_CARDS,
+          object: OBJECT_CARDS,
+          action: ACTION_CARDS,
+        };
+        const types = Object.keys(pools) as (keyof typeof pools)[];
+        const type = types[Math.floor(Math.random() * types.length)];
+        const pool = pools[type];
+        const text = pool[Math.floor(Math.random() * pool.length)];
+        this.doSubmitBlankCard(turnP.id, type, text);
+        return true;
+      }
+      if (phase === "shuffle") {
+        this.doShuffle(turnP.id);
+        return true;
+      }
+      if (phase === "draw") {
+        return this.doDraw(turnP.id);
+      }
+      if (phase === "story") {
+        const card = this.state.drawnCard;
+        if (!card) return false;
+        const text =
+          card.type === "ending"
+            ? "(봇) 그렇게 모든 이야기는 막을 내렸다."
+            : `(봇) 그렇게 ${card.text}에 얽힌 이야기가 이어졌다.`;
+        this.doSubmitStory(turnP.id, text);
+        return true;
+      }
+    } else if (phase === "voting" && this.state.currentStory) {
+      const story = this.state.currentStory;
+      const pendingBot = this.state.participants.find(
+        (p) => p.isBot && p.connected && p.id !== story.authorId && !story.votes[p.id]
+      );
+      if (pendingBot) {
+        story.votes[pendingBot.id] = Math.random() < 0.75 ? "O" : "X";
+        this.tryResolveVoting();
+        return true;
+      }
+    }
+
+    return false;
   }
 
   private startRound() {
@@ -430,6 +539,7 @@ export class StoryRoom {
       this.tryResolveVoting();
     }
 
+    this.runBotsIfNeeded();
     await this.persist();
     this.broadcast();
   }
@@ -465,6 +575,7 @@ export class StoryRoom {
         name: p.name,
         score: p.score,
         connected: p.connected,
+        isBot: p.isBot,
       })),
       currentTurnId: this.currentTurnId(),
       drawnCard: this.state.drawnCard,

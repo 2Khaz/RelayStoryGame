@@ -12,6 +12,7 @@ const joinError = document.getElementById("join-error");
 
 const lobbyRoomLabel = document.getElementById("lobby-room-label");
 const lobbyParticipantList = document.getElementById("lobby-participant-list");
+const addBotButton = document.getElementById("add-bot-button");
 const startButton = document.getElementById("start-button");
 const lobbyHint = document.getElementById("lobby-hint");
 
@@ -98,25 +99,40 @@ function render(state) {
 
 function renderLobby(state) {
   lobbyRoomLabel.textContent = currentRoomId;
+  const isOwner = state.ownerId === myParticipantId;
+
   lobbyParticipantList.replaceChildren();
   for (const p of state.participants) {
     const li = document.createElement("li");
     const nameSpan = document.createElement("span");
-    nameSpan.textContent = p.name + (p.id === state.ownerId ? " (방장)" : "") + (!p.connected ? " - 자리비움" : "");
+    nameSpan.textContent =
+      (p.isBot ? "🤖 " : "") +
+      p.name +
+      (p.id === state.ownerId ? " (방장)" : "") +
+      (!p.connected ? " - 자리비움" : "");
     li.append(nameSpan);
+
+    if (isOwner && p.isBot) {
+      const removeBtn = document.createElement("button");
+      removeBtn.className = "secondary";
+      removeBtn.textContent = "제거";
+      removeBtn.addEventListener("click", () => send({ type: "remove_bot", id: p.id }));
+      li.append(removeBtn);
+    }
     lobbyParticipantList.append(li);
   }
 
   const connectedCount = state.participants.filter((p) => p.connected).length;
-  const isOwner = state.ownerId === myParticipantId;
   const canStart = isOwner && connectedCount >= 3 && connectedCount <= 6;
 
+  addBotButton.classList.toggle("hidden", !isOwner);
+  addBotButton.disabled = state.participants.length >= 6;
   startButton.classList.toggle("hidden", !isOwner);
   startButton.disabled = !canStart;
   if (isOwner) {
     lobbyHint.textContent = canStart
       ? "게임을 시작할 수 있습니다."
-      : `인원이 ${connectedCount}명입니다. 3~6명이 모여야 시작할 수 있습니다.`;
+      : `인원이 ${connectedCount}명입니다. 3~6명이 모여야 시작할 수 있습니다. (봇으로 채워도 됩니다)`;
   } else {
     lobbyHint.textContent = `현재 ${connectedCount}명 참가 중. 방장이 시작하기를 기다리는 중입니다.`;
   }
@@ -170,7 +186,7 @@ function renderScoreboard(container, state) {
       (p.id === state.currentTurnId ? " current-turn" : "") +
       (!p.connected ? " away" : "");
     const name = document.createElement("span");
-    name.textContent = p.name + (p.id === state.ownerId ? " 👑" : "");
+    name.textContent = (p.isBot ? "🤖 " : "") + p.name + (p.id === state.ownerId ? " 👑" : "");
     const score = document.createElement("span");
     score.textContent = `${p.score}점`;
     row.append(name, score);
@@ -394,6 +410,7 @@ joinButton.addEventListener("click", () => {
   connect(roomId, name);
 });
 
+addBotButton.addEventListener("click", () => send({ type: "add_bot" }));
 startButton.addEventListener("click", () => send({ type: "start_round" }));
 replayButton.addEventListener("click", () => send({ type: "start_round" }));
 endRoomButton.addEventListener("click", () => {

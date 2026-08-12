@@ -1,0 +1,16 @@
+{
+  "name": "relay-story-game",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "cf-typegen": "wrangler types"
+  },
+  "devDependencies": {
+    "wrangler": "^4.121.0",
+    "@cloudflare/workers-types": "^5.20260804.1",
+    "typescript": "^5.7.0"
+  }
+}

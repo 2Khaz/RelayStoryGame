@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>릴레이 스토리 게임</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main>
+    <h1>릴레이 스토리 게임</h1>
+
+    <section id="join-screen">
+      <input id="room-input" type="text" placeholder="방 코드 (예: room1)" maxlength="32" />
+      <input id="name-input" type="text" placeholder="닉네임" maxlength="24" />
+      <button id="join-button">입장하기</button>
+    </section>
+
+    <section id="game-screen" class="hidden">
+      <div class="room-header">
+        <span id="room-label"></span>
+        <span id="turn-indicator"></span>
+      </div>
+
+      <div id="story-list"></div>
+
+      <form id="submit-form">
+        <textarea id="text-input" maxlength="280" placeholder="다음 이야기를 이어써 주세요..."></textarea>
+        <button type="submit">이어쓰기</button>
+      </form>
+
+      <aside id="participant-list"></aside>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

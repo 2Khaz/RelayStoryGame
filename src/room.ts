@@ -263,11 +263,7 @@ export class StoryRoom {
         if (this.currentTurnId() !== participantId) return send({ type: "error", message: "당신의 차례가 아닙니다." });
         const text = String(data.text || "").trim().slice(0, 300);
         if (!text) return send({ type: "error", message: "내용을 입력해 주세요." });
-        const card = this.state.drawnCard;
-        if (!card) return send({ type: "error", message: "뽑힌 카드가 없습니다." });
-        if (card.type !== "ending" && !text.includes(card.text)) {
-          return send({ type: "error", message: `이야기에 "${card.text}"를 반드시 포함해야 합니다.` });
-        }
+        if (!this.state.drawnCard) return send({ type: "error", message: "뽑힌 카드가 없습니다." });
         this.doSubmitStory(participantId, text);
         break;
       }

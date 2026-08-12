@@ -13,7 +13,7 @@
     <section id="join-screen">
       <input id="room-input" type="text" placeholder="방 코드 (예: room1)" maxlength="32" />
       <input id="name-input" type="text" placeholder="닉네임" maxlength="24" />
-      <button id="join-button">입장하기</button>
+      <button id="join-button">🚪 입장하기</button>
       <p id="join-error" class="error-text"></p>
     </section>
 
@@ -21,8 +21,10 @@
       <h2>대기실 — 방: <span id="lobby-room-label"></span></h2>
       <p class="muted">3~6명이 모이면 방장이 게임을 시작할 수 있습니다.</p>
       <ul id="lobby-participant-list"></ul>
-      <button id="add-bot-button" class="secondary hidden">봇 추가</button>
-      <button id="start-button" class="hidden">게임 시작</button>
+      <div class="lobby-actions">
+        <button id="add-bot-button" class="secondary hidden">🤖 봇 추가</button>
+        <button id="start-button" class="hidden">▶️ 게임 시작</button>
+      </div>
       <p id="lobby-hint" class="muted"></p>
     </section>
 
@@ -48,9 +50,9 @@
       <div id="end-story-log" class="log-box"></div>
 
       <div class="end-actions">
-        <button id="replay-button" class="hidden">다시하기</button>
-        <button id="end-room-button" class="hidden">방 종료</button>
-        <button id="leave-room-button">방 나가기</button>
+        <button id="replay-button" class="hidden">🔁 다시하기</button>
+        <button id="end-room-button" class="secondary hidden">🛑 방 종료</button>
+        <button id="leave-room-button" class="secondary">🚪 방 나가기</button>
       </div>
 
       <h3>지난 판 목록</h3>

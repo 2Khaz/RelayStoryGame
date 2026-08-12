@@ -31,6 +31,15 @@ const roundHistoryList = document.getElementById("round-history-list");
 const roundHistoryDetail = document.getElementById("round-history-detail");
 
 const CARD_TYPE_LABELS = { place: "장소", object: "물건", action: "행동", ending: "엔딩" };
+const CARD_TYPE_ICONS = { place: "🏠", object: "📦", action: "🏃", ending: "🎬" };
+const RANK_MEDALS = ["🥇", "🥈", "🥉"];
+
+function buildBadge(type) {
+  const span = document.createElement("span");
+  span.className = `badge type-${type}`;
+  span.textContent = `${CARD_TYPE_ICONS[type]} ${CARD_TYPE_LABELS[type]}`;
+  return span;
+}
 
 let socket = null;
 let myParticipantId = null;
@@ -153,10 +162,11 @@ function renderLogEntries(container, log) {
       div.className = "log-entry card" + (isEnding ? " ending" : "");
       const prefix = document.createElement("span");
       prefix.textContent = `${entry.authorName}님이 카드를 뽑았습니다 → `;
+      const badge = buildBadge(entry.cardType);
       const cardText = document.createElement("span");
       cardText.className = "card-text";
-      cardText.textContent = `[${CARD_TYPE_LABELS[entry.cardType]}] ${entry.cardText}`;
-      div.append(prefix, cardText);
+      cardText.textContent = " " + entry.cardText;
+      div.append(prefix, badge, cardText);
     } else if (entry.type === "story") {
       div.className = "log-entry";
       const author = document.createElement("span");
@@ -167,10 +177,10 @@ function renderLogEntries(container, log) {
       div.append(author, text);
     } else if (entry.type === "vote_result") {
       div.className = "log-entry vote-result";
-      div.textContent = `투표 결과 — O:${entry.o} X:${entry.x} → ${entry.scored ? entry.authorName + "님 1점 획득" : "점수 없음"}`;
+      div.textContent = `🗳️ 투표 결과 — O:${entry.o} X:${entry.x} → ${entry.scored ? "✨ " + entry.authorName + "님 1점 획득" : "점수 없음"}`;
     } else if (entry.type === "skip") {
       div.className = "log-entry system";
-      div.textContent = `${entry.authorName}님은 자리비움 상태라 턴을 건너뜁니다.`;
+      div.textContent = `💤 ${entry.authorName}님은 자리비움 상태라 턴을 건너뜁니다.`;
     }
     container.append(div);
   }
@@ -179,14 +189,19 @@ function renderLogEntries(container, log) {
 
 function renderScoreboard(container, state) {
   container.replaceChildren();
-  for (const p of state.participants) {
+  const ranked = [...state.participants].sort((a, b) => b.score - a.score);
+  for (const p of ranked) {
+    const rank = ranked.indexOf(p);
     const row = document.createElement("div");
     row.className =
       "score-row" +
       (p.id === state.currentTurnId ? " current-turn" : "") +
       (!p.connected ? " away" : "");
     const name = document.createElement("span");
-    name.textContent = (p.isBot ? "🤖 " : "") + p.name + (p.id === state.ownerId ? " 👑" : "");
+    const rankMark = document.createElement("span");
+    rankMark.className = "rank";
+    rankMark.textContent = RANK_MEDALS[rank] || `${rank + 1}.`;
+    name.append(rankMark, document.createTextNode((p.isBot ? "🤖 " : "") + p.name + (p.id === state.ownerId ? " 👑" : "")));
     const score = document.createElement("span");
     score.textContent = `${p.score}점`;
     row.append(name, score);
@@ -215,7 +230,7 @@ function renderGame(state) {
     turnIndicator.textContent = `현재 턴: ${turnName}`;
     if (isMyTurn) {
       const btn = document.createElement("button");
-      btn.textContent = "덱 섞기";
+      btn.textContent = "🔀 덱 섞기";
       btn.addEventListener("click", () => send({ type: "shuffle" }));
       actionPanel.append(btn);
     } else {
@@ -225,7 +240,7 @@ function renderGame(state) {
     turnIndicator.textContent = `현재 턴: ${turnName}`;
     if (isMyTurn) {
       const btn = document.createElement("button");
-      btn.textContent = `카드 뽑기 (덱 ${state.deckSize}장)`;
+      btn.textContent = `🎴 카드 뽑기 (덱 ${state.deckSize}장)`;
       btn.addEventListener("click", () => send({ type: "draw" }));
       actionPanel.append(btn);
     } else {
@@ -255,8 +270,13 @@ function waitingText(text) {
 
 function buildCardReveal(card) {
   const div = document.createElement("div");
-  div.className = "card-reveal" + (card.type === "ending" ? " ending" : "");
-  div.textContent = card.type === "ending" ? `엔딩 카드! ${card.text}` : `[${CARD_TYPE_LABELS[card.type]}] ${card.text}`;
+  div.className = `card-reveal type-${card.type}`;
+  const label = document.createElement("span");
+  label.className = "badge-label";
+  label.textContent = card.type === "ending" ? `${CARD_TYPE_ICONS.ending} 엔딩 카드` : `${CARD_TYPE_ICONS[card.type]} ${CARD_TYPE_LABELS[card.type]}`;
+  const text = document.createElement("span");
+  text.textContent = card.text;
+  div.append(label, text);
   return div;
 }
 
@@ -281,7 +301,7 @@ function buildBlankCardForm() {
 
   const submitBtn = document.createElement("button");
   submitBtn.type = "submit";
-  submitBtn.textContent = "덱에 추가";
+  submitBtn.textContent = "➕ 덱에 추가";
 
   row.append(select, textInput, submitBtn);
   form.append(row);
@@ -303,11 +323,11 @@ function buildStoryForm(drawnCard) {
   textarea.placeholder =
     drawnCard.type === "ending"
       ? "이야기를 마무리하는 엔딩을 작성해 주세요..."
-      : `"${drawnCard.text}"를 반드시 포함해 이야기를 이어써 주세요...`;
+      : `"${drawnCard.text}"와 관련된 내용으로 이야기를 이어써 주세요...`;
 
   const submitBtn = document.createElement("button");
   submitBtn.type = "submit";
-  submitBtn.textContent = "제출";
+  submitBtn.textContent = "✍️ 제출";
 
   form.append(textarea, submitBtn);
   form.addEventListener("submit", (e) => {
@@ -345,11 +365,12 @@ function buildVotingPanel(state) {
     const btnRow = document.createElement("div");
     btnRow.className = "vote-buttons";
     const oBtn = document.createElement("button");
-    oBtn.textContent = "O";
+    oBtn.className = "vote-o";
+    oBtn.textContent = "⭕ O";
     oBtn.addEventListener("click", () => send({ type: "vote", value: "O" }));
     const xBtn = document.createElement("button");
     xBtn.className = "vote-x";
-    xBtn.textContent = "X";
+    xBtn.textContent = "❌ X";
     xBtn.addEventListener("click", () => send({ type: "vote", value: "X" }));
     btnRow.append(oBtn, xBtn);
     wrapper.append(btnRow);
@@ -363,11 +384,12 @@ function renderEnd(state) {
 
   finalScoreboard.replaceChildren();
   const sorted = [...state.participants].sort((a, b) => b.score - a.score);
-  for (const p of sorted) {
+  sorted.forEach((p, rank) => {
     const li = document.createElement("li");
-    li.textContent = `${p.name} — ${p.score}점`;
+    const mark = RANK_MEDALS[rank] || `${rank + 1}.`;
+    li.textContent = `${mark} ${p.isBot ? "🤖 " : ""}${p.name} — ${p.score}점`;
     finalScoreboard.append(li);
-  }
+  });
 
   renderLogEntries(endStoryLog, state.log);
 

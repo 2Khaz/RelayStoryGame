@@ -9,6 +9,8 @@ const roomInput = document.getElementById("room-input");
 const nameInput = document.getElementById("name-input");
 const joinButton = document.getElementById("join-button");
 const joinError = document.getElementById("join-error");
+const roomListEl = document.getElementById("room-list");
+const roomListEmpty = document.getElementById("room-list-empty");
 
 const lobbyRoomLabel = document.getElementById("lobby-room-label");
 const lobbyParticipantList = document.getElementById("lobby-participant-list");
@@ -52,6 +54,7 @@ function showScreen(name) {
 }
 
 function connect(roomId, name) {
+  stopRoomListPolling();
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   socket = new WebSocket(
     `${protocol}//${location.host}/api/room/${encodeURIComponent(roomId)}/ws?name=${encodeURIComponent(name)}`
@@ -68,6 +71,7 @@ function connect(roomId, name) {
     } else if (data.type === "join_rejected") {
       joinError.textContent = data.message;
       joinButton.disabled = false;
+      startRoomListPolling();
     } else if (data.type === "error") {
       alert(data.message);
     } else if (data.type === "room_closed") {
@@ -89,6 +93,72 @@ function resetToJoinScreen() {
   socket = null;
   joinButton.disabled = false;
   showScreen("join");
+  startRoomListPolling();
+}
+
+const ROOM_PHASE_META = {
+  lobby: { label: "🟢 대기 중", className: "waiting" },
+  round_ended: { label: "🔵 판 종료 (재시작 대기)", className: "ended" },
+};
+const ROOM_PHASE_DEFAULT = { label: "🟠 진행 중", className: "playing" };
+
+let roomListTimer = null;
+
+function startRoomListPolling() {
+  fetchRoomList();
+  if (roomListTimer) return;
+  roomListTimer = setInterval(fetchRoomList, 4000);
+}
+
+function stopRoomListPolling() {
+  if (roomListTimer) {
+    clearInterval(roomListTimer);
+    roomListTimer = null;
+  }
+}
+
+async function fetchRoomList() {
+  try {
+    const res = await fetch("/api/rooms");
+    if (!res.ok) return;
+    const rooms = await res.json();
+    renderRoomList(rooms);
+  } catch {
+    // best-effort; ignore transient failures
+  }
+}
+
+function renderRoomList(rooms) {
+  roomListEl.replaceChildren();
+  roomListEmpty.classList.toggle("hidden", rooms.length > 0);
+
+  for (const room of rooms) {
+    const li = document.createElement("li");
+
+    const meta = document.createElement("span");
+    meta.className = "room-meta";
+    const name = document.createElement("span");
+    name.textContent = room.roomId;
+    const status = document.createElement("span");
+    const phaseMeta = ROOM_PHASE_META[room.phase] || ROOM_PHASE_DEFAULT;
+    status.className = `room-status ${phaseMeta.className}`;
+    status.textContent = phaseMeta.label;
+    const count = document.createElement("span");
+    count.className = "muted";
+    count.textContent = `${room.participantCount}명`;
+    meta.append(name, status, count);
+
+    const joinBtn = document.createElement("button");
+    joinBtn.className = "secondary";
+    joinBtn.textContent = "선택";
+    joinBtn.addEventListener("click", () => {
+      roomInput.value = room.roomId;
+      nameInput.focus();
+    });
+
+    li.append(meta, joinBtn);
+    roomListEl.append(li);
+  }
 }
 
 function render(state) {
@@ -439,3 +509,5 @@ leaveRoomButton.addEventListener("click", () => {
   if (socket) socket.close();
   resetToJoinScreen();
 });
+
+startRoomListPolling();

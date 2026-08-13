@@ -11,10 +11,16 @@
     <h1>이어쓰는 이야기</h1>
 
     <section id="join-screen">
-      <input id="room-input" type="text" placeholder="방 코드 (예: room1)" maxlength="32" />
-      <input id="name-input" type="text" placeholder="닉네임" maxlength="24" />
-      <button id="join-button">🚪 입장하기</button>
+      <div class="join-form">
+        <input id="room-input" type="text" placeholder="방 코드 (예: room1)" maxlength="32" />
+        <input id="name-input" type="text" placeholder="닉네임" maxlength="24" />
+        <button id="join-button">🚪 입장하기</button>
+      </div>
       <p id="join-error" class="error-text"></p>
+
+      <h3>열려있는 방</h3>
+      <ul id="room-list"></ul>
+      <p id="room-list-empty" class="muted hidden">현재 열려있는 방이 없습니다. 방 코드를 새로 만들어 입장해 보세요.</p>
     </section>
 
     <section id="lobby-screen" class="hidden">

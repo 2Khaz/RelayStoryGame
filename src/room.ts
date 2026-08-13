@@ -1,5 +1,6 @@
 export interface Env {
   STORY_ROOM: DurableObjectNamespace;
+  LOBBY: DurableObjectNamespace;
   ASSETS: Fetcher;
 }
 
@@ -129,12 +130,15 @@ function freshState(): RoomState {
 
 export class StoryRoom {
   private ctx: DurableObjectState;
+  private env: Env;
   private sockets = new Map<WebSocket, string>();
   private state: RoomState = freshState();
   private ready: Promise<void>;
+  private roomId: string | null = null;
 
-  constructor(ctx: DurableObjectState, _env: Env) {
+  constructor(ctx: DurableObjectState, env: Env) {
     this.ctx = ctx;
+    this.env = env;
     this.ready = ctx.storage.get<RoomState>("state").then((stored) => {
       if (stored) this.state = stored;
     });
@@ -143,11 +147,14 @@ export class StoryRoom {
   async fetch(request: Request): Promise<Response> {
     await this.ready;
 
+    const url = new URL(request.url);
+    const roomMatch = url.pathname.match(/^\/api\/room\/([^/]+)\/ws$/);
+    if (roomMatch) this.roomId = decodeURIComponent(roomMatch[1]);
+
     if (request.headers.get("Upgrade") !== "websocket") {
       return new Response("Expected WebSocket", { status: 426 });
     }
 
-    const url = new URL(request.url);
     const name = (url.searchParams.get("name") || "").trim().slice(0, 24);
     if (!name) return new Response("Missing name", { status: 400 });
 
@@ -197,6 +204,7 @@ export class StoryRoom {
 
     await this.persist();
     this.broadcast();
+    await this.notifyLobby();
 
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -322,6 +330,7 @@ export class StoryRoom {
     this.runBotsIfNeeded();
     await this.persist();
     this.broadcast();
+    await this.notifyLobby();
   }
 
   private doSubmitBlankCard(participantId: string, cardType: CardType, text: string) {
@@ -538,6 +547,7 @@ export class StoryRoom {
     this.runBotsIfNeeded();
     await this.persist();
     this.broadcast();
+    await this.notifyLobby();
   }
 
   private async closeRoom() {
@@ -553,10 +563,26 @@ export class StoryRoom {
     this.sockets.clear();
     this.state = freshState();
     await this.ctx.storage.deleteAll();
+    await this.notifyLobby();
   }
 
   private async persist() {
     await this.ctx.storage.put("state", this.state);
+  }
+
+  private async notifyLobby() {
+    if (!this.roomId) return;
+    const connectedCount = this.state.participants.filter((p) => p.connected).length;
+    try {
+      const stub = this.env.LOBBY.get(this.env.LOBBY.idFromName("global"));
+      await stub.fetch(`https://lobby.internal/rooms/${encodeURIComponent(this.roomId)}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ participantCount: connectedCount, phase: this.state.phase }),
+      });
+    } catch {
+      // best-effort; the room list is a non-critical convenience feature
+    }
   }
 
   private publicState() {

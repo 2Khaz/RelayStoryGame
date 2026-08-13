@@ -12,6 +12,10 @@
       {
         "name": "STORY_ROOM",
         "class_name": "StoryRoom"
+      },
+      {
+        "name": "LOBBY",
+        "class_name": "Lobby"
       }
     ]
   },
@@ -19,6 +23,10 @@
     {
       "tag": "v1",
       "new_sqlite_classes": ["StoryRoom"]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["Lobby"]
     }
   ]
 }

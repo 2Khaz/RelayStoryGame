@@ -1,7 +1,9 @@
 export { StoryRoom } from "./room";
+export { Lobby } from "./lobby";
 
 export interface Env {
   STORY_ROOM: DurableObjectNamespace;
+  LOBBY: DurableObjectNamespace;
   ASSETS: Fetcher;
 }
 
@@ -13,6 +15,11 @@ export default {
     if (roomMatch) {
       const id = env.STORY_ROOM.idFromName(roomMatch[1]);
       const stub = env.STORY_ROOM.get(id);
+      return stub.fetch(request);
+    }
+
+    if (url.pathname === "/api/rooms") {
+      const stub = env.LOBBY.get(env.LOBBY.idFromName("global"));
       return stub.fetch(request);
     }
 

@@ -118,11 +118,64 @@ h4 {
   padding: 24px;
 }
 
-#join-screen {
+.join-form {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
   align-items: center;
+}
+
+#room-list {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#room-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+
+#room-list li button {
+  padding: 6px 14px;
+  font-size: 0.85rem;
+}
+
+.room-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.room-status {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--muted);
+}
+
+.room-status.waiting {
+  background: var(--success);
+}
+
+.room-status.playing {
+  background: var(--object);
+}
+
+.room-status.ended {
+  background: var(--accent);
 }
 
 input,

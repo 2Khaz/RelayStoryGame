@@ -53,14 +53,28 @@ function showScreen(name) {
   }
 }
 
+let intentionalDisconnect = false;
+let reconnectAttempts = 0;
+let pingTimer = null;
+const MAX_RECONNECT_ATTEMPTS = 6;
+
 function connect(roomId, name) {
   stopRoomListPolling();
+  intentionalDisconnect = false;
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   socket = new WebSocket(
     `${protocol}//${location.host}/api/room/${encodeURIComponent(roomId)}/ws?name=${encodeURIComponent(name)}`
   );
   currentRoomId = roomId;
   joinButton.disabled = true;
+
+  socket.addEventListener("open", () => {
+    reconnectAttempts = 0;
+    clearInterval(pingTimer);
+    pingTimer = setInterval(() => {
+      if (socket && socket.readyState === WebSocket.OPEN) send({ type: "ping" });
+    }, 25000);
+  });
 
   socket.addEventListener("message", (event) => {
     const data = JSON.parse(event.data);
@@ -75,22 +89,36 @@ function connect(roomId, name) {
     } else if (data.type === "error") {
       alert(data.message);
     } else if (data.type === "room_closed") {
+      intentionalDisconnect = true;
       alert("방장이 방을 나가 방이 종료되었습니다.");
       resetToJoinScreen();
     }
   });
 
   socket.addEventListener("close", () => {
-    if (screens.join.classList.contains("hidden")) {
-      // unexpected close while in-game
-      resetToJoinScreen();
+    clearInterval(pingTimer);
+    if (intentionalDisconnect) return;
+    if (!screens.join.classList.contains("hidden")) {
+      attemptReconnect(roomId, name);
     }
   });
+}
+
+function attemptReconnect(roomId, name) {
+  if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+    alert("연결이 끊어졌습니다. 다시 입장해 주세요.");
+    reconnectAttempts = 0;
+    resetToJoinScreen();
+    return;
+  }
+  reconnectAttempts++;
+  setTimeout(() => connect(roomId, name), 1500);
 }
 
 function resetToJoinScreen() {
   myParticipantId = null;
   socket = null;
+  clearInterval(pingTimer);
   joinButton.disabled = false;
   showScreen("join");
   startRoomListPolling();
@@ -506,6 +534,7 @@ endRoomButton.addEventListener("click", () => {
   }
 });
 leaveRoomButton.addEventListener("click", () => {
+  intentionalDisconnect = true;
   if (socket) socket.close();
   resetToJoinScreen();
 });

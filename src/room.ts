@@ -65,6 +65,7 @@ interface RoomState {
 
 const MIN_PLAYERS = 3;
 const MAX_PLAYERS = 6;
+const OWNER_GRACE_MS = 20_000;
 
 // Placeholder card content — swap in real content whenever the design is finalized.
 const PLACE_CARDS = [
@@ -526,11 +527,6 @@ export class StoryRoom {
     const participant = this.state.participants.find((p) => p.id === participantId);
     if (!participant) return;
 
-    if (participantId === this.state.ownerId) {
-      await this.closeRoom();
-      return;
-    }
-
     participant.connected = false;
 
     const midTurnPhases: Phase[] = ["blank_card", "shuffle", "draw", "story"];
@@ -548,6 +544,22 @@ export class StoryRoom {
     await this.persist();
     this.broadcast();
     await this.notifyLobby();
+
+    if (participantId === this.state.ownerId) {
+      // Don't destroy the room on the spot -- a dropped connection (brief network
+      // hiccup, tab backgrounding, or a server redeploy) looks identical to a real
+      // departure. Give the owner a grace window to reconnect with the same name
+      // before actually tearing the room down.
+      await this.ctx.storage.setAlarm(Date.now() + OWNER_GRACE_MS);
+    }
+  }
+
+  async alarm() {
+    await this.ready;
+    const owner = this.state.participants.find((p) => p.id === this.state.ownerId);
+    if (owner && !owner.connected) {
+      await this.closeRoom();
+    }
   }
 
   private async closeRoom() {

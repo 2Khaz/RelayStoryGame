@@ -150,14 +150,9 @@ function renderLobby(state) {
 function renderLogEntries(container, log) {
   container.replaceChildren();
   for (const entry of log) {
+    if (entry.type === "blank_card_added" || entry.type === "shuffle") continue;
     const div = document.createElement("div");
-    if (entry.type === "blank_card_added") {
-      div.className = "log-entry system";
-      div.textContent = `${entry.authorName}님이 빈 카드를 작성해 덱에 추가했습니다.`;
-    } else if (entry.type === "shuffle") {
-      div.className = "log-entry system";
-      div.textContent = `${entry.authorName}님이 덱을 섞었습니다.`;
-    } else if (entry.type === "draw") {
+    if (entry.type === "draw") {
       const isEnding = entry.cardType === "ending";
       div.className = "log-entry card" + (isEnding ? " ending" : "");
       const prefix = document.createElement("span");

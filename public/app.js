@@ -302,6 +302,8 @@ function renderScoreboard(container, state) {
   }
 }
 
+let lastAnimatedDrawId = null;
+
 function renderGame(state) {
   roundLabel.textContent = `${state.roundNumber}판`;
   const turnName = state.participants.find((p) => p.id === state.currentTurnId)?.name;
@@ -310,48 +312,97 @@ function renderGame(state) {
   renderLogEntries(storyLog, state.log);
   renderScoreboard(scoreboard, state);
 
-  actionPanel.replaceChildren();
-
   if (state.phase === "blank_card") {
     turnIndicator.textContent = `현재 턴: ${turnName}`;
+    actionPanel.replaceChildren();
     if (isMyTurn) {
-      actionPanel.append(buildBlankCardForm());
+      actionPanel.append(
+        buildTutorialHint("✏️ 다음에 뽑힐 카드를 자유롭게 만들어보세요! 제출하면 자동으로 섞이고 한 장이 뽑혀요."),
+        buildBlankCardForm()
+      );
     } else {
-      actionPanel.append(waitingText(`${turnName}님이 빈 카드를 작성 중입니다...`));
-    }
-  } else if (state.phase === "shuffle") {
-    turnIndicator.textContent = `현재 턴: ${turnName}`;
-    if (isMyTurn) {
-      const btn = document.createElement("button");
-      btn.textContent = "🔀 덱 섞기";
-      btn.addEventListener("click", () => send({ type: "shuffle" }));
-      actionPanel.append(btn);
-    } else {
-      actionPanel.append(waitingText(`${turnName}님이 덱을 섞을 차례입니다...`));
-    }
-  } else if (state.phase === "draw") {
-    turnIndicator.textContent = `현재 턴: ${turnName}`;
-    if (isMyTurn) {
-      const btn = document.createElement("button");
-      btn.textContent = `🎴 카드 뽑기 (덱 ${state.deckSize}장)`;
-      btn.addEventListener("click", () => send({ type: "draw" }));
-      actionPanel.append(btn);
-    } else {
-      actionPanel.append(waitingText(`${turnName}님이 카드를 뽑을 차례입니다...`));
+      actionPanel.append(waitingText(`${turnName}님이 새 카드를 작성 중입니다...`));
     }
   } else if (state.phase === "story") {
     turnIndicator.textContent = `현재 턴: ${turnName}`;
-    actionPanel.append(buildCardReveal(state.drawnCard));
-    if (isMyTurn) {
-      actionPanel.append(buildStoryForm(state.drawnCard));
+    if (state.drawnCard && state.drawnCard.id !== lastAnimatedDrawId) {
+      lastAnimatedDrawId = state.drawnCard.id;
+      playDrawAnimation(state.drawnCard, () => renderStoryPanel(state, turnName, isMyTurn));
     } else {
-      actionPanel.append(waitingText(`${turnName}님이 이야기를 작성 중입니다...`));
+      renderStoryPanel(state, turnName, isMyTurn);
     }
   } else if (state.phase === "voting") {
     turnIndicator.textContent = "투표 진행 중";
+    actionPanel.replaceChildren();
     if (state.drawnCard) actionPanel.append(buildCardReveal(state.drawnCard));
     actionPanel.append(buildVotingPanel(state));
   }
+}
+
+function renderStoryPanel(state, turnName, isMyTurn) {
+  actionPanel.replaceChildren();
+  actionPanel.append(buildCardReveal(state.drawnCard));
+  if (isMyTurn) {
+    actionPanel.append(
+      buildTutorialHint("📝 위 카드와 관련된 내용으로 이야기를 이어써보세요. 다른 플레이어들이 O/X로 평가해요!"),
+      buildStoryForm(state.drawnCard)
+    );
+  } else {
+    actionPanel.append(waitingText(`${turnName}님이 이야기를 작성 중입니다...`));
+  }
+}
+
+function playDrawAnimation(card, onDone) {
+  actionPanel.replaceChildren();
+  const stage = document.createElement("div");
+  stage.className = "draw-animation";
+  actionPanel.append(stage);
+
+  const steps = ["🃏 새 카드가 카드 뭉치에 추가되었습니다", "🔀 카드를 섞는 중..."];
+  let i = 0;
+
+  function showStep() {
+    if (i >= steps.length) {
+      stage.replaceChildren(buildFlipCard(card));
+      setTimeout(onDone, 750);
+      return;
+    }
+    const div = document.createElement("div");
+    div.className = "draw-step";
+    div.textContent = steps[i];
+    stage.replaceChildren(div);
+    i++;
+    setTimeout(showStep, 600);
+  }
+  showStep();
+}
+
+function buildFlipCard(card) {
+  const wrap = document.createElement("div");
+  wrap.className = "card-flip-wrap";
+  const flip = document.createElement("div");
+  flip.className = "card-flip";
+
+  const back = document.createElement("div");
+  back.className = "card-face back";
+  back.textContent = "🂠";
+
+  const front = document.createElement("div");
+  front.className = "card-face front";
+  front.append(buildCardReveal(card));
+
+  flip.append(back, front);
+  wrap.append(flip);
+
+  setTimeout(() => flip.classList.add("flipped"), 50);
+  return wrap;
+}
+
+function buildTutorialHint(text) {
+  const p = document.createElement("p");
+  p.className = "tutorial-hint";
+  p.textContent = text;
+  return p;
 }
 
 function waitingText(text) {
@@ -472,6 +523,53 @@ function buildVotingPanel(state) {
   return wrapper;
 }
 
+function buildStorySummary(log) {
+  const wrap = document.createElement("div");
+
+  const drawEntries = log.filter((e) => e.type === "draw");
+  const storyEntries = log.filter((e) => e.type === "story");
+
+  const keywordsTitle = document.createElement("h4");
+  keywordsTitle.textContent = "🔑 이번 판에서 뽑힌 카드";
+  const keywordRow = document.createElement("div");
+  keywordRow.className = "keyword-row";
+  for (const d of drawEntries) {
+    const chip = document.createElement("span");
+    chip.className = "keyword-chip";
+    chip.append(buildBadge(d.cardType), document.createTextNode(" " + d.cardText));
+    keywordRow.append(chip);
+  }
+
+  const storyTitle = document.createElement("h4");
+  storyTitle.textContent = "📖 완성된 이야기";
+  const storyBox = document.createElement("div");
+  storyBox.className = "log-box story-summary-box";
+  for (const s of storyEntries) {
+    const p = document.createElement("p");
+    const author = document.createElement("span");
+    author.className = "author";
+    author.textContent = s.authorName + ": ";
+    const text = document.createElement("span");
+    text.textContent = s.text;
+    p.append(author, text);
+    storyBox.append(p);
+  }
+
+  const detailToggle = document.createElement("button");
+  detailToggle.className = "secondary detail-toggle";
+  detailToggle.textContent = "🔍 상세 기록 보기";
+  const detailLog = document.createElement("div");
+  detailLog.className = "log-box hidden";
+  renderLogEntries(detailLog, log);
+  detailToggle.addEventListener("click", () => {
+    detailLog.classList.toggle("hidden");
+    detailToggle.textContent = detailLog.classList.contains("hidden") ? "🔍 상세 기록 보기" : "🔼 상세 기록 접기";
+  });
+
+  wrap.append(keywordsTitle, keywordRow, storyTitle, storyBox, detailToggle, detailLog);
+  return wrap;
+}
+
 function renderEnd(state) {
   const isOwner = state.ownerId === myParticipantId;
 
@@ -484,7 +582,7 @@ function renderEnd(state) {
     finalScoreboard.append(li);
   });
 
-  renderLogEntries(endStoryLog, state.log);
+  endStoryLog.replaceChildren(buildStorySummary(state.log));
 
   replayButton.classList.toggle("hidden", !isOwner);
   endRoomButton.classList.toggle("hidden", !isOwner);
@@ -498,10 +596,7 @@ function renderEnd(state) {
       roundHistoryDetail.replaceChildren();
       const title = document.createElement("h4");
       title.textContent = `${round.roundNumber}판 결과: ` + round.finalScores.map((s) => `${s.name} ${s.score}점`).join(", ");
-      const logContainer = document.createElement("div");
-      logContainer.className = "log-box";
-      renderLogEntries(logContainer, round.log);
-      roundHistoryDetail.append(title, logContainer);
+      roundHistoryDetail.append(title, buildStorySummary(round.log));
     });
     li.append(btn);
     roundHistoryList.append(li);

@@ -252,18 +252,10 @@ export class StoryRoom {
           return send({ type: "error", message: "유형과 내용을 입력해 주세요." });
         }
         this.doSubmitBlankCard(participantId, cardType, text);
-        break;
-      }
-      case "shuffle": {
-        if (this.state.phase !== "shuffle") return send({ type: "error", message: "지금은 셔플 단계가 아닙니다." });
-        if (this.currentTurnId() !== participantId) return send({ type: "error", message: "당신의 차례가 아닙니다." });
+        // Shuffling and drawing are no longer separate manual steps -- they
+        // happen automatically right after the card is submitted so the
+        // player's flow is just "write a card" -> "write a story".
         this.doShuffle(participantId);
-        break;
-      }
-      case "draw": {
-        if (this.state.phase !== "draw") return send({ type: "error", message: "지금은 드로우 단계가 아닙니다." });
-        if (this.currentTurnId() !== participantId) return send({ type: "error", message: "당신의 차례가 아닙니다." });
-        if (this.state.deck.length === 0) return send({ type: "error", message: "덱에 카드가 없습니다." });
         this.doDraw(participantId);
         break;
       }
@@ -359,6 +351,11 @@ export class StoryRoom {
   }
 
   private doDraw(participantId: string): boolean {
+    if (this.state.deck.length === 0) {
+      // Should never happen (one card is always added right before a draw),
+      // but refill defensively so an automatic flow can never get stuck.
+      this.state.deck = shuffle(this.state.ownedCards);
+    }
     if (this.state.deck.length === 0) return false;
     const idx = Math.floor(Math.random() * this.state.deck.length);
     const card = this.state.deck.splice(idx, 1)[0];
@@ -401,7 +398,7 @@ export class StoryRoom {
 
   private tryOneBotAction(): boolean {
     const phase = this.state.phase;
-    const midTurnPhases: Phase[] = ["blank_card", "shuffle", "draw", "story"];
+    const midTurnPhases: Phase[] = ["blank_card", "story"];
 
     if (midTurnPhases.includes(phase)) {
       const turnId = this.currentTurnId();
@@ -419,14 +416,9 @@ export class StoryRoom {
         const pool = pools[type];
         const text = pool[Math.floor(Math.random() * pool.length)];
         this.doSubmitBlankCard(turnP.id, type, text);
-        return true;
-      }
-      if (phase === "shuffle") {
         this.doShuffle(turnP.id);
+        this.doDraw(turnP.id);
         return true;
-      }
-      if (phase === "draw") {
-        return this.doDraw(turnP.id);
       }
       if (phase === "story") {
         const card = this.state.drawnCard;
@@ -529,7 +521,7 @@ export class StoryRoom {
 
     participant.connected = false;
 
-    const midTurnPhases: Phase[] = ["blank_card", "shuffle", "draw", "story"];
+    const midTurnPhases: Phase[] = ["blank_card", "story"];
     if (midTurnPhases.includes(this.state.phase) && this.currentTurnId() === participantId) {
       this.state.log.push({ type: "skip", authorId: participantId, authorName: participant.name, ts: Date.now() });
       this.state.drawnCard = null;
